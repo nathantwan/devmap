@@ -55,3 +55,26 @@ def get_repo_tree(owner: str, repo: str):
                     edges.append(edge)
 
     return {"nodes": nodes, "edges": edges}
+
+@app.get("/churn")
+def get_churn(owner: str, repo: str):
+    churn = {}
+
+    for page in range(1, 6):
+        url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=20&page={page}"
+        response = requests.get(url, headers=HEADERS)
+        commits = response.json()
+
+        if not isinstance(commits, list):
+            break
+
+        for commit in commits:
+            sha = commit["sha"]
+            detail_url = f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}"
+            detail = requests.get(detail_url, headers=HEADERS).json()
+
+            for file in detail.get("files", []):
+                filename = file["filename"]
+                churn[filename] = churn.get(filename, 0) + 1
+
+    return {"churn": churn}

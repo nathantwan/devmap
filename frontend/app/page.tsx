@@ -35,15 +35,33 @@ export default function Home() {
     const owner = parts[0]
     const repo = parts[1]
 
-    const res = await fetch(`http://localhost:8000/repo?owner=${owner}&repo=${repo}`)
-    const data = await res.json()
+    const [treeRes, churnRes] = await Promise.all([
+      fetch(`http://localhost:8000/repo?owner=${owner}&repo=${repo}`),
+      fetch(`http://localhost:8000/churn?owner=${owner}&repo=${repo}`)
+    ])
 
-    const rawNodes = data.nodes.slice(0, 100).map((node: any) => ({
+    const treeData = await treeRes.json()
+    const churnData = await churnRes.json()
+    const churn = churnData.churn
+
+    const maxChurn = Math.max(...Object.values(churn) as number[])
+
+    const getColor = (nodeId: string, type: string) => {
+      if (type === 'folder') return '#6366f1'
+      const count = churn[nodeId] || 0
+      if (count === 0) return '#22c55e'
+      const intensity = count / maxChurn
+      if (intensity > 0.6) return '#ef4444'
+      if (intensity > 0.3) return '#f97316'
+      return '#eab308'
+    }
+
+    const rawNodes = treeData.nodes.slice(0, 100).map((node: any) => ({
       id: node.id,
-      data: { label: node.label },
+      data: { label: `${node.label} ${churn[node.id] ? `(${churn[node.id]})` : ''}` },
       position: { x: 0, y: 0 },
       style: {
-        background: node.type === 'folder' ? '#6366f1' : '#22c55e',
+        background: getColor(node.id, node.type),
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -52,7 +70,7 @@ export default function Home() {
       }
     }))
 
-    const rawEdges = data.edges.slice(0, 200).map((edge: any, index: number) => ({
+    const rawEdges = treeData.edges.slice(0, 200).map((edge: any, index: number) => ({
       id: `e${index}`,
       source: edge.source,
       target: edge.target,
@@ -64,6 +82,8 @@ export default function Home() {
     setEdges(layoutedEdges)
     setLoading(false)
   }
+
+  
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
