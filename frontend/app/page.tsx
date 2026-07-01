@@ -35,19 +35,36 @@ export default function Home() {
     const owner = parts[0]
     const repo = parts[1]
 
-    const [treeRes, churnRes] = await Promise.all([
+    const [treeRes, churnRes, clusterRes] = await Promise.all([
       fetch(`http://localhost:8000/repo?owner=${owner}&repo=${repo}`),
-      fetch(`http://localhost:8000/churn?owner=${owner}&repo=${repo}`)
+      fetch(`http://localhost:8000/churn?owner=${owner}&repo=${repo}`),
+      fetch(`http://localhost:8000/cluster?owner=${owner}&repo=${repo}`)
     ])
 
     const treeData = await treeRes.json()
     const churnData = await churnRes.json()
+    const clusterData = await clusterRes.json()
+
     const churn = churnData.churn
+    const clusters = clusterData.clusters
 
     const maxChurn = Math.max(...Object.values(churn) as number[])
 
+    const clusterColors: Record<number, string> = {
+      0: '#6366f1',  // indigo
+      1: '#ec4899',  // pink
+      2: '#14b8a6',  // teal
+      3: '#f97316',  // orange
+      4: '#8b5cf6',  // purple
+      5: '#06b6d4',  // cyan
+      6: '#f43f5e',  // rose
+      7: '#84cc16',  // lime
+    }
+
     const getColor = (nodeId: string, type: string) => {
-      if (type === 'folder') return '#6366f1'
+      if (type === 'folder') return '#334155'
+      if (clusters[nodeId] === -1) return '#64748b'  // noise = gray
+      if (clusters[nodeId] !== undefined) return clusterColors[clusters[nodeId] % 8]
       const count = churn[nodeId] || 0
       if (count === 0) return '#22c55e'
       const intensity = count / maxChurn
@@ -82,7 +99,6 @@ export default function Home() {
     setEdges(layoutedEdges)
     setLoading(false)
   }
-
   
 
   return (
