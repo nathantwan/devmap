@@ -28,7 +28,8 @@ export default function Home() {
   const [edges, setEdges] = useState([])
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
-
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
   const handleSubmit = async () => {
     setLoading(true)
     const parts = url.replace('https://github.com/', '').split('/')
@@ -99,7 +100,16 @@ export default function Home() {
     setEdges(layoutedEdges)
     setLoading(false)
   }
-  
+  const handleSearch = async () => {
+    const parts = url.replace('https://github.com/', '').split('/')
+    const owner = parts[0]
+    const repo = parts[1]
+
+    const res = await fetch(`http://localhost:8000/search?owner=${owner}&repo=${repo}&query=${query}`)
+    const data = await res.json()
+    setSearchResults(data.results || [])
+  }
+
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -117,6 +127,29 @@ export default function Home() {
           {loading ? 'Loading...' : 'Visualize'}
         </button>
       </div>
+      <div style={{ padding: '12px 16px', background: '#1e293b', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: 'none', fontSize: '14px', background: '#0f172a', color: 'white' }}
+          placeholder='Ask the repo e.g. "how does auth work?"'
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        <button
+          onClick={handleSearch}
+          style={{ padding: '8px 20px', background: '#14b8a6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
+        >
+          Search
+        </button>
+        {searchResults.length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {searchResults.map((r, i) => (
+              <span key={i} style={{ background: '#0f172a', color: '#14b8a6', padding: '4px 10px', borderRadius: '6px', fontSize: '12px' }}>
+                {r.path.split('/').pop()} ({(r.score * 100).toFixed(0)}%)
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <div style={{ flex: 1 }}>
         <ReactFlow nodes={nodes} edges={edges} fitView>
           <Background />
@@ -124,5 +157,6 @@ export default function Home() {
         </ReactFlow>
       </div>
     </div>
+    
   )
 }

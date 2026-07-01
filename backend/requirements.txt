@@ -5,3 +5,4 @@ requests==2.34.2
 sentence-transformers==5.6.0
 hdbscan==0.8.44
 numpy==2.5.0
+scikit-learn==1.9.0

@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 import hdbscan
 import numpy as np
 import base64
+from sklearn.metrics.pairwise import cosine_similarity
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -26,6 +27,32 @@ HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"}
 @app.get("/")
 def root():
     return {"message": "DevMap API is running"}
+
+# store embeddings in memory after clustering so can be reused
+repo_embeddings_cache = {}
+
+@app.get("/search")
+def search_repo(owner: str, repo: str, query: str):
+    cache_key = f"{owner}/{repo}"
+    
+    if cache_key not in repo_embeddings_cache:
+        return {"error": "Run /cluster first to build the embeddings cache"}
+    
+    cached = repo_embeddings_cache[cache_key]
+    paths = cached["paths"]
+    embeddings = cached["embeddings"]
+    
+    query_embedding = model.encode([query])
+    similarities = cosine_similarity(query_embedding, embeddings)[0]
+    
+    top_indices = similarities.argsort()[::-1][:5]
+    
+    results = [
+        {"path": paths[i], "score": float(similarities[i])}
+        for i in top_indices
+    ]
+    
+    return {"results": results}
 
 @app.get("/repo")
 def get_repo_tree(owner: str, repo: str):
@@ -115,6 +142,10 @@ def cluster_files(owner: str, repo: str):
         return {"error": "not enough code files to cluster"}
 
     embeddings = model.encode(contents)
+    repo_embeddings_cache[f"{owner}/{repo}"] = {
+        "paths": paths,
+        "embeddings": embeddings
+    }
 
     clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
     labels = clusterer.fit_predict(embeddings)
