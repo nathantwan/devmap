@@ -3,6 +3,12 @@ from dotenv import load_dotenv
 import requests
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from sentence_transformers import SentenceTransformer
+import hdbscan
+import numpy as np
+import base64
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 load_dotenv()
 
@@ -78,3 +84,43 @@ def get_churn(owner: str, repo: str):
                 churn[filename] = churn.get(filename, 0) + 1
 
     return {"churn": churn}
+
+@app.get("/cluster")
+def cluster_files(owner: str, repo: str):
+    url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+    response = requests.get(url, headers=HEADERS)
+    data = response.json()
+
+    code_files = [
+        item for item in data.get("tree", [])
+        if item["type"] == "blob" and item["path"].endswith((".py", ".js", ".ts", ".tsx", ".jsx"))
+    ][:80]  # cap it so we don't blow through rate limits
+
+    contents = []
+    paths = []
+
+    for file in code_files:
+        file_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file['path']}"
+        file_res = requests.get(file_url, headers=HEADERS).json()
+
+        if "content" in file_res:
+            try:
+                decoded = base64.b64decode(file_res["content"]).decode("utf-8", errors="ignore")
+                contents.append(decoded[:2000])  # cap content length per file
+                paths.append(file["path"])
+            except Exception:
+                continue
+
+    if len(contents) < 5:
+        return {"error": "not enough code files to cluster"}
+
+    embeddings = model.encode(contents)
+
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
+    labels = clusterer.fit_predict(embeddings)
+
+    result = {}
+    for path, label in zip(paths, labels):
+        result[path] = int(label)
+
+    return {"clusters": result}
